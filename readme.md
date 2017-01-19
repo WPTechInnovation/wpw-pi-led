@@ -5,7 +5,8 @@ Worldpay Within Pi LED demo
 # Setup
 
 * Register an account with Worldpay for online payments [here](http://online.worldpay.com)
-* Download Worldpay Within SDK: `go get github.com/WPTechInnovation/worldpay-within-sdk`
+* Download/install dependencies, please run the following from the project root:
+  * `go get ./...`
 
 # Usage
 The following commands need to be run out of both the `producer` and `consumer` directories
