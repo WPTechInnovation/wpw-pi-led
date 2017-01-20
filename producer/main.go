@@ -46,7 +46,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	_wpw, err := wpwithin.Initialise("WPW Pi LED", "Worldpay Within Pi LED Demo")
+	_wpw, err := wpwithin.Initialise("pi-led-producer", "Worldpay Within Pi LED Demo - Producer")
 	wpw = _wpw
 
 	errCheck(err, "WorldpayWithin Initialise")
