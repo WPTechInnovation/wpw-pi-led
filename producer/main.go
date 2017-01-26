@@ -7,7 +7,10 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/Sirupsen/logrus"
+	"github.com/rifflock/lfshook"
 	"github.com/wptechinnovation/worldpay-within-sdk/sdkcore/wpwithin"
+	"github.com/wptechinnovation/worldpay-within-sdk/sdkcore/wpwithin/psp"
 	"github.com/wptechinnovation/worldpay-within-sdk/sdkcore/wpwithin/psp/onlineworldpay"
 	"github.com/wptechinnovation/worldpay-within-sdk/sdkcore/wpwithin/types"
 )
@@ -19,13 +22,15 @@ var flagWPClientKey string
 // Application Vars
 var wpw wpwithin.WPWithin
 var wpwHandler Handler
+var pspConfig map[string]string
+var unitsInTime map[int]int
 
 const (
-	redDescr    string = "Turn on the red LED"
-	greenDescr  string = "Turn on the green LED"
-	yellowDescr string = "Turn on the yellow LED"
-	oneSecond   string = "One second"
-	oneMinute   string = "One minute"
+	redDescr   string = "Turn on the red LED"
+	greenDescr string = "Turn on the green LED"
+	blueDescr  string = "Turn on the blue LED"
+	second     string = "second"
+	minute     string = "minute"
 )
 
 func init() {
@@ -35,6 +40,9 @@ func init() {
 }
 
 func main() {
+
+	err := initLog()
+	errCheck(err, "initLog()")
 
 	flag.Parse()
 
@@ -52,20 +60,19 @@ func main() {
 	errCheck(err, "WorldpayWithin Initialise")
 
 	doSetupServices()
+	printProducerOverview()
+	fmt.Printf("\n\n")
 
 	// wpwhandler accepts callbacks from worldpay within when service delivery begin/end is required.
-	err = wpwHandler.setup()
+	err = wpwHandler.setup(wpw.GetDevice().Services)
 	errCheck(err, "wpwHandler setup")
 	wpw.SetEventHandler(&wpwHandler)
 
-	pspConfig := map[string]string{
-		onlineworldpay.CfgMerchantClientKey:  flagWPClientKey,
-		onlineworldpay.CfgMerchantServiceKey: flagWPServiceKey,
-	}
 	err = wpw.InitProducer(pspConfig)
-
 	errCheck(err, "Init producer")
+	fmt.Println("Worldpay Within Producer successfully initialised")
 
+	fmt.Println("Starting Service broadcast...")
 	err = wpw.StartServiceBroadcast(0) // 0 = no timeout
 
 	errCheck(err, "start service broadcast")
@@ -76,14 +83,75 @@ func main() {
 
 func doSetupServices() {
 
+	_unitsInTime := make(map[int]int, 0)
+	unitsInTime = _unitsInTime
+
+	unitsInTime[1] = 1
+	unitsInTime[2] = 60
+
+	////////////////////////////////////////////
+	// PSP Configuration
+	////////////////////////////////////////////
+
+	_pspConfig := make(map[string]string, 0)
+	pspConfig = _pspConfig
+	pspConfig[psp.CfgPSPName] = onlineworldpay.PSPName
+	pspConfig[onlineworldpay.CfgMerchantClientKey] = flagWPClientKey
+	pspConfig[onlineworldpay.CfgMerchantServiceKey] = flagWPServiceKey
+	pspConfig[psp.CfgHTEPrivateKey] = flagWPServiceKey
+	pspConfig[psp.CfgHTEPublicKey] = flagWPClientKey
+	pspConfig[onlineworldpay.CfgAPIEndpoint] = "https://api.worldpay.com/v1"
+
+	////////////////////////////////////////////
+	// Red LED
+	////////////////////////////////////////////
+
+	svcRedLed, err := types.NewService()
+	errCheck(err, "New service - red led")
+
+	svcRedLed.ID = 1
+	svcRedLed.Name = "Red LED"
+	svcRedLed.Description = redDescr
+
+	priceRedLedSecond, err := types.NewPrice()
+	errCheck(err, "Create new price - red led second")
+
+	priceRedLedSecond.Description = redDescr
+	priceRedLedSecond.ID = 1
+	priceRedLedSecond.UnitDescription = second
+	priceRedLedSecond.UnitID = 1
+	priceRedLedSecond.PricePerUnit = &types.PricePerUnit{
+		Amount:       5,
+		CurrencyCode: "GBP",
+	}
+
+	svcRedLed.AddPrice(*priceRedLedSecond)
+
+	priceRedLedMinute, err := types.NewPrice()
+	errCheck(err, "Create new price - red led minute")
+
+	priceRedLedMinute.Description = redDescr
+	priceRedLedMinute.ID = 2
+	priceRedLedMinute.UnitDescription = minute
+	priceRedLedMinute.UnitID = 2
+	priceRedLedMinute.PricePerUnit = &types.PricePerUnit{
+		Amount:       20,
+		CurrencyCode: "GBP",
+	}
+
+	svcRedLed.AddPrice(*priceRedLedMinute)
+
+	err = wpw.AddService(svcRedLed)
+	errCheck(err, "Add service - red led")
+
 	////////////////////////////////////////////
 	// Green LED
 	////////////////////////////////////////////
 
 	svcGreenLed, err := types.NewService()
 	errCheck(err, "Create new service - Green LED")
-	svcGreenLed.ID = 1
-	svcGreenLed.Name = "Big LED"
+	svcGreenLed.ID = 2
+	svcGreenLed.Name = "Green LED"
 	svcGreenLed.Description = greenDescr
 
 	priceGreenLedSecond, err := types.NewPrice()
@@ -91,7 +159,7 @@ func doSetupServices() {
 
 	priceGreenLedSecond.Description = greenDescr
 	priceGreenLedSecond.ID = 1
-	priceGreenLedSecond.UnitDescription = oneSecond
+	priceGreenLedSecond.UnitDescription = second
 	priceGreenLedSecond.UnitID = 1
 	priceGreenLedSecond.PricePerUnit = &types.PricePerUnit{
 		Amount:       10,
@@ -105,7 +173,7 @@ func doSetupServices() {
 
 	priceGreenLedMinute.Description = greenDescr
 	priceGreenLedMinute.ID = 2
-	priceGreenLedMinute.UnitDescription = oneMinute
+	priceGreenLedMinute.UnitDescription = minute
 	priceGreenLedMinute.UnitID = 2
 	priceGreenLedMinute.PricePerUnit = &types.PricePerUnit{
 		Amount:       40, /* WOAH! This is minor units so means just 40p */
@@ -118,94 +186,54 @@ func doSetupServices() {
 	errCheck(err, "Add service - green led")
 
 	////////////////////////////////////////////
-	// Red LED
+	// Blue LED
 	////////////////////////////////////////////
 
-	svcRedLed, err := types.NewService()
-	errCheck(err, "New service - red led")
+	svcBlueLed, err := types.NewService()
+	errCheck(err, "New service - blue led")
 
-	svcRedLed.ID = 2
-	svcRedLed.Name = "Red LED"
-	svcRedLed.Description = redDescr
+	svcBlueLed.ID = 3
+	svcBlueLed.Name = "Blue LED"
+	svcBlueLed.Description = redDescr
 
-	priceRedLedSecond, err := types.NewPrice()
-	errCheck(err, "Create new price - red led second")
+	priceBlueLedSecond, err := types.NewPrice()
+	errCheck(err, "Create new price - blue led second")
 
-	priceRedLedSecond.Description = redDescr
-	priceRedLedSecond.ID = 3
-	priceRedLedSecond.UnitDescription = oneSecond
-	priceRedLedSecond.UnitID = 1
-	priceRedLedSecond.PricePerUnit = &types.PricePerUnit{
+	priceBlueLedSecond.Description = blueDescr
+	priceBlueLedSecond.ID = 1
+	priceBlueLedSecond.UnitDescription = second
+	priceBlueLedSecond.UnitID = 1
+	priceBlueLedSecond.PricePerUnit = &types.PricePerUnit{
 		Amount:       5,
 		CurrencyCode: "GBP",
 	}
 
-	svcRedLed.AddPrice(*priceRedLedSecond)
+	err = svcBlueLed.AddPrice(*priceBlueLedSecond)
+	errCheck(err, "Add service price - blue led second")
 
-	priceRedLedMinute, err := types.NewPrice()
-	errCheck(err, "Create new price - red led minute")
+	priceBlueLedMinute, err := types.NewPrice()
+	errCheck(err, "Create new price - blue led minute")
 
-	priceRedLedMinute.Description = redDescr
-	priceRedLedMinute.ID = 4
-	priceRedLedMinute.UnitDescription = oneMinute
-	priceRedLedMinute.UnitID = 2
-	priceRedLedMinute.PricePerUnit = &types.PricePerUnit{
+	priceBlueLedMinute.Description = blueDescr
+	priceBlueLedMinute.ID = 2
+	priceBlueLedMinute.UnitDescription = minute
+	priceBlueLedMinute.UnitID = 2
+	priceBlueLedMinute.PricePerUnit = &types.PricePerUnit{
 		Amount:       20,
 		CurrencyCode: "GBP",
 	}
 
-	svcRedLed.AddPrice(*priceRedLedMinute)
+	err = svcBlueLed.AddPrice(*priceBlueLedMinute)
+	errCheck(err, "Add service price - blue led minute")
 
-	err = wpw.AddService(svcRedLed)
-	errCheck(err, "Add service - red led")
-
-	////////////////////////////////////////////
-	// Yellow LED
-	////////////////////////////////////////////
-
-	svcYellowLed, err := types.NewService()
-	errCheck(err, "New service - yellow led")
-
-	svcYellowLed.ID = 3
-	svcYellowLed.Name = "Yellow LED"
-	svcYellowLed.Description = yellowDescr
-
-	priceYellowLedSecond, err := types.NewPrice()
-	errCheck(err, "Create new price - yellow led second")
-
-	priceYellowLedSecond.Description = yellowDescr
-	priceYellowLedSecond.ID = 1
-	priceYellowLedSecond.UnitDescription = oneSecond
-	priceYellowLedSecond.UnitID = 1
-	priceYellowLedSecond.PricePerUnit = &types.PricePerUnit{
-		Amount:       5,
-		CurrencyCode: "GBP",
-	}
-
-	svcYellowLed.AddPrice(*priceYellowLedSecond)
-
-	priceYellowLedMinute, err := types.NewPrice()
-	errCheck(err, "Create new price - yellow led minute")
-
-	priceYellowLedMinute.Description = yellowDescr
-	priceYellowLedMinute.ID = 2
-	priceYellowLedMinute.UnitDescription = oneMinute
-	priceYellowLedMinute.UnitID = 2
-	priceYellowLedMinute.PricePerUnit = &types.PricePerUnit{
-		Amount:       20,
-		CurrencyCode: "GBP",
-	}
-
-	svcYellowLed.AddPrice(*priceYellowLedMinute)
-
-	err = wpw.AddService(svcYellowLed)
-	errCheck(err, "Add service - yellow led")
+	err = wpw.AddService(svcBlueLed)
+	errCheck(err, "Add service - blue led")
 }
 
 func errCheck(err error, hint string) {
 
 	if err != nil {
-		fmt.Printf("Did encounter error during: %s", hint)
+		fmt.Printf("Did encounter error during: %s\n", hint)
 		fmt.Println(err.Error())
 		fmt.Println("Quitting...")
 		os.Exit(1)
@@ -224,4 +252,56 @@ func runForever() {
 	go fnForever()
 
 	<-done // Block forever
+}
+
+func initLog() error {
+
+	log.SetFormatter(&log.TextFormatter{})
+	log.SetLevel(log.DebugLevel)
+
+	log.AddHook(lfshook.NewHook(lfshook.PathMap{
+		log.InfoLevel:  "logs/info.log",
+		log.ErrorLevel: "logs/error.log",
+		log.DebugLevel: "logs/debug.log",
+		log.WarnLevel:  "logs/warn.log",
+		log.PanicLevel: "logs/panic.log",
+		log.FatalLevel: "logs/fatal.log",
+	}))
+
+	f, err := os.OpenFile("/dev/null", os.O_WRONLY|os.O_CREATE, 0755)
+
+	log.SetOutput(f)
+
+	return err
+}
+
+func printProducerOverview() {
+
+	device := wpw.GetDevice()
+
+	fmt.Println("Producer Overview:")
+	fmt.Println("")
+	fmt.Println("Device:")
+	fmt.Printf("\tName: %s\n", device.Name)
+	fmt.Printf("\tDescription: %s \n", device.Description)
+	fmt.Printf("\tIPv4: %s \n", device.IPv4Address)
+	fmt.Printf("\tUUID: %s \n", device.UID)
+	fmt.Printf("\tServices:\n")
+	for _, svc := range device.Services {
+
+		fmt.Printf("\t\tID=%d, Name=%s, Description=%s\n", svc.ID, svc.Name, svc.Description)
+		fmt.Printf("\t\t\tPrices: \n")
+		for _, price := range svc.Prices {
+
+			fmt.Printf("\t\t\t\tID=%d, Description=%s\n", price.ID, price.Description)
+			fmt.Printf("\t\t\t\tUnitID=%d, UnitDescription=%s\n", price.UnitID, price.UnitDescription)
+			fmt.Printf("\t\t\t\tCurrency=%s, Amount=%d\n", price.PricePerUnit.CurrencyCode, price.PricePerUnit.Amount)
+		}
+	}
+
+	fmt.Println("PSP Configuration:")
+	for k, v := range pspConfig {
+
+		fmt.Printf("\t%s \t--> %s\n", k, v)
+	}
 }
