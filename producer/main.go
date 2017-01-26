@@ -18,6 +18,7 @@ import (
 // Application flags
 var flagWPServiceKey string
 var flagWPClientKey string
+var flagIgnoreGPIO bool // Ignore any errors that arise from trying to setup RPi GPIO pins
 
 // Application Vars
 var wpw wpwithin.WPWithin
@@ -37,6 +38,7 @@ func init() {
 
 	flag.StringVar(&flagWPServiceKey, "wpservicekey", "", "Worldpay service key")
 	flag.StringVar(&flagWPClientKey, "wpclientkey", "", "Worldpay client key")
+	flag.BoolVar(&flagIgnoreGPIO, "ignoregpio", false, "Ignore GPIO pin errors")
 }
 
 func main() {
@@ -64,7 +66,7 @@ func main() {
 	fmt.Printf("\n\n")
 
 	// wpwhandler accepts callbacks from worldpay within when service delivery begin/end is required.
-	err = wpwHandler.setup(wpw.GetDevice().Services)
+	err = wpwHandler.setup(wpw.GetDevice().Services, flagIgnoreGPIO)
 	errCheck(err, "wpwHandler setup")
 	wpw.SetEventHandler(&wpwHandler)
 
