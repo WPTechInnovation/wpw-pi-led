@@ -258,6 +258,7 @@ func promptContinue() {
 
 	if flagInteractive {
 
+		fmt.Println("<return to continue>")
 		fmt.Scanf("\n", nil)
 	}
 }
