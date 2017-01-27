@@ -11,10 +11,11 @@ import (
 
 // Handler handles the events coming from Worldpay Within
 type Handler struct {
-	ledGreen rpio.Pin
-	ledRed   rpio.Pin
-	ledBlue  rpio.Pin
-	services map[int]*types.Service
+	ledGreen    rpio.Pin
+	ledRed      rpio.Pin
+	ledBlue     rpio.Pin
+	services    map[int]*types.Service
+	rpioenabled bool
 }
 
 func (handler *Handler) setup(services map[int]*types.Service, ignoreGPIO bool) error {
@@ -39,8 +40,14 @@ func (handler *Handler) setup(services map[int]*types.Service, ignoreGPIO bool) 
 			return gpioErr
 		}
 
+		fmt.Println("Ignore Raspberry Pi GPIO errors")
 		return nil
 	}
+
+	// Did successfully setup rpio
+
+	handler.rpioenabled = true
+
 	fmt.Println("Did open Raspberry Pi GPIO")
 
 	// Cleanup (defer until end)
@@ -82,23 +89,36 @@ func (handler *Handler) BeginServiceDelivery(serviceID int, serviceDeliveryToken
 	fmt.Println("Warning, hardcoded price selection due to WPW design flaw. i.e. This event doesn't know what price was selected..")
 	fmt.Printf("(%d) %s -> %s for %d %s\n", svc.ID, svc.Name, price.Description, durationSeconds, price.UnitDescription)
 
+	var selectedPin rpio.Pin
+
 	fmt.Print("POWER ON ")
 	switch svc.ID {
 
 	case 1:
 		fmt.Println("RED LED")
-		handler.ledRed.High()
+		selectedPin = handler.ledRed
 	case 2:
 		fmt.Println("GREEN LED")
-		handler.ledGreen.High()
+		selectedPin = handler.ledGreen
 	case 3:
 		fmt.Println("BLUE LED")
-		handler.ledBlue.High()
+		selectedPin = handler.ledBlue
 	default:
 		fmt.Println("Unknown service id")
 	}
 
+	if handler.rpioenabled {
+
+		selectedPin.High()
+	} else {
+
+		fmt.Println("Raspberry Pi GPIO disabled.")
+	}
+
 	time.Sleep(time.Duration(durationSeconds) * time.Second)
+
+	fmt.Println("Time is up.. calling EndServiceDelivery()..")
+	fmt.Println()
 
 	handler.EndServiceDelivery(serviceID, serviceDeliveryToken, unitsToSupply)
 }
@@ -120,20 +140,30 @@ func (handler *Handler) EndServiceDelivery(serviceID int, serviceDeliveryToken t
 
 	fmt.Printf("%d - %s\n", svc.ID, svc.Name)
 
+	var selectedPin rpio.Pin
+
 	fmt.Print("POWER OFF ")
 	switch svc.ID {
 
 	case 1:
 		fmt.Println("RED LED")
-		handler.ledRed.Low()
+		selectedPin = handler.ledRed
 	case 2:
 		fmt.Println("GREEN LED")
-		handler.ledGreen.Low()
+		selectedPin = handler.ledGreen
 	case 3:
 		fmt.Println("BLUE LED")
-		handler.ledBlue.Low()
+		selectedPin = handler.ledBlue
 	default:
 		fmt.Println("Unknown service id")
+	}
+
+	if handler.rpioenabled {
+
+		selectedPin.Low()
+	} else {
+
+		fmt.Println("Raspberry Pi GPIO disabled.")
 	}
 }
 
