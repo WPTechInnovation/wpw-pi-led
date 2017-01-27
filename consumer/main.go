@@ -70,14 +70,14 @@ func doConsumeService() {
 	bm, err := wpw.DeviceDiscovery(flagDiscoveryTimeout)
 	errCheck(err, "wpw.DeviceDiscovery()")
 
-	fmt.Printf("Found %d devices, searching for device with UUID = %s\n", len(bm), flagProducerUUID)
+	fmt.Printf("Found %d devices, filtering on device with UUID = %s\n", len(bm), flagProducerUUID)
 
 	var selectedBM *wpwtypes.BroadcastMessage
 	for _, bm := range bm {
 
 		if strings.EqualFold(bm.ServerID, flagProducerUUID) {
 
-			fmt.Printf("Found device %s - %s\n", bm.DeviceDescription, bm.ServerID)
+			fmt.Printf("Found required device %s - %s\n", bm.DeviceDescription, bm.ServerID)
 
 			selectedBM = &bm
 			break
@@ -133,7 +133,7 @@ func doConsumeService() {
 
 		if price.ID == flagPriceID {
 
-			fmt.Printf("Found required price %d - %s, %s\n", flagServiceID, price.Description, price.UnitDescription)
+			fmt.Printf("Found required price %d - %s @%s %dp per %s\n", flagServiceID, price.Description, price.PricePerUnit.CurrencyCode, price.PricePerUnit.Amount, price.UnitDescription)
 			selectedPrice = &price
 			break
 		}
@@ -149,7 +149,9 @@ func doConsumeService() {
 	fmt.Printf("\n\n")
 
 	// Service + price selection
-	fmt.Println("Selecting service and price.. (Getting final quote)")
+	fmt.Println("Selecting service and price.. Getting quote for:")
+	fmt.Printf("%s - %d units of %s @ %s %dp per unit\n", selectedPrice.Description, flagUnitQuantity, selectedPrice.UnitDescription, selectedPrice.PricePerUnit.CurrencyCode, selectedPrice.PricePerUnit.Amount)
+	fmt.Println()
 	totalPriceResponse, err := wpw.SelectService(selectedSVC.ServiceID, flagUnitQuantity, selectedPrice.ID)
 	errCheck(err, "wpw.SelectService()")
 
